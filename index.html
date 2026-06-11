@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>Calculateur de Raffinage Albion</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: { colors: { dark: '#121212', card: '#1e1e1e', accent: '#eab308' } }
+            }
+        }
+    </script>
+</head>
+<body class="bg-dark text-gray-200 min-h-screen p-4 font-sans">
+    
+    <div class="max-w-7xl mx-auto mb-6 text-center">
+        <h1 class="text-3xl font-bold text-accent">⚒️ Calculateur de Raffinage Albion</h1>
+        <p class="text-gray-400 mt-2">Analysez la rentabilité du raffinage en temps réel via l'Albion Data Project (Version 100% web)</p>
+    </div>
+
+    <!-- CALCULATEUR RAFFINAGE -->
+    <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-6">
+        <!-- Panneau de config Raffinage -->
+        <div class="md:col-span-1 space-y-4">
+            
+            <div class="bg-card p-4 rounded border border-gray-800 shadow">
+                <h2 class="text-lg font-bold text-accent mb-2 border-b border-gray-700 pb-1">1. Ressources</h2>
+                <div class="space-y-1 text-sm">
+                    <label class="flex items-center gap-2"><input type="radio" name="res_type" value="WOOD" checked class="form-radio text-accent bg-dark"> 🪵 Bois (Planches)</label>
+                    <label class="flex items-center gap-2"><input type="radio" name="res_type" value="ORE" class="form-radio text-accent bg-dark"> 🪨 Minerai (Lingots)</label>
+                    <label class="flex items-center gap-2"><input type="radio" name="res_type" value="HIDE" class="form-radio text-accent bg-dark"> 🦌 Peau (Cuir)</label>
+                    <label class="flex items-center gap-2"><input type="radio" name="res_type" value="FIBER" class="form-radio text-accent bg-dark"> 🌿 Fibre (Tissu)</label>
+                    <label class="flex items-center gap-2"><input type="radio" name="res_type" value="ROCK" class="form-radio text-accent bg-dark"> 🧱 Pierre (Blocs)</label>
+                </div>
+            </div>
+
+            <div class="bg-card p-4 rounded border border-gray-800 shadow">
+                <h2 class="text-lg font-bold text-accent mb-2 border-b border-gray-700 pb-1">2. Villes de Marché</h2>
+                <div id="refine-villes-container" class="space-y-1 text-sm"></div>
+            </div>
+
+            <div class="bg-card p-4 rounded border border-gray-800 shadow">
+                <h2 class="text-lg font-bold text-accent mb-2 border-b border-gray-700 pb-1">3. Bonus (Taux de Retour)</h2>
+                <div class="flex items-center justify-between text-sm mb-2">
+                    <span>Bonus de Ville (%)</span>
+                    <input type="number" id="bonus-ville" value="36.7" class="w-16 bg-dark border border-gray-700 rounded px-1 text-center">
+                </div>
+                <div class="flex items-center justify-between text-sm mb-2">
+                    <span>Bonus Quotidien (%)</span>
+                    <input type="number" id="bonus-jour" value="0" class="w-16 bg-dark border border-gray-700 rounded px-1 text-center">
+                </div>
+                <div class="flex items-center justify-between text-sm mb-2">
+                    <span>Bonus de Focus (%)</span>
+                    <input type="number" id="bonus-focus" value="0" class="w-16 bg-dark border border-gray-700 rounded px-1 text-center">
+                </div>
+                <div class="flex items-center justify-between text-sm mb-2 pt-2 border-t border-gray-800">
+                    <span class="text-gray-400">Taxe de Vente (%)</span>
+                    <input type="number" id="taxe-vente" value="4.0" step="0.5" class="w-16 bg-dark border border-gray-700 rounded px-1 text-center">
+                </div>
+                <div class="flex items-center justify-between text-sm">
+                    <span class="text-gray-400">Frais Station (/100)</span>
+                    <input type="number" id="frais-station" value="400" class="w-16 bg-dark border border-gray-700 rounded px-1 text-center">
+                </div>
+            </div>
+
+            <button onclick="calculerRaffinage()" class="w-full bg-accent text-black font-bold rounded py-2 hover:bg-yellow-500 shadow-lg transition-colors">Lancer l'Analyse</button>
+
+        </div>
+
+        <!-- Résultats Raffinage -->
+        <div class="md:col-span-3">
+            <div class="bg-black p-4 rounded-xl border border-gray-800 shadow-xl h-[85vh] overflow-y-auto">
+                <h2 class="text-xl font-bold text-white mb-4 border-b border-gray-800 pb-2">Résultats de Rentabilité</h2>
+                <div id="refining-results" class="text-gray-400">
+                    Sélectionnez une ressource et cliquez sur "Lancer l'Analyse" pour interroger les marchés en direct...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const toutesLesVilles = ["Thetford", "Lymhurst", "Bridgewatch", "Martlock", "Fort Sterling", "Caerleon", "Caerleon (Black Market)", "Brecilien"];
+
+        const mapping = {
+            "WOOD":  {raw: "WOOD", refined: "PLANKS"},
+            "ORE":   {raw: "ORE", refined: "METALBAR"},
+            "HIDE":  {raw: "HIDE", refined: "LEATHER"},
+            "FIBER": {raw: "FIBER", refined: "CLOTH"},
+            "ROCK":  {raw: "ROCK", refined: "STONEBLOCK"},
+        };
+
+        const amounts = {2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 5, 8: 5};
+
+        function get_iv_raw(tier, ench) {
+            return (2 ** (tier - 2)) * (2 ** ench);
+        }
+
+        function get_iv_ref(tier, ench) {
+            if (tier === 2) {
+                return amounts[2] * get_iv_raw(2, 0);
+            } else if (tier === 3) {
+                return amounts[3] * get_iv_raw(3, 0) + get_iv_ref(2, 0);
+            } else if (tier === 4) {
+                return amounts[4] * get_iv_raw(4, ench) + get_iv_ref(3, 0);
+            } else {
+                return amounts[tier] * get_iv_raw(tier, ench) + get_iv_ref(tier - 1, ench);
+            }
+        }
+
+        function initialiserInterface() {
+            const container = document.getElementById('refine-villes-container');
+            container.innerHTML = '';
+            
+            toutesLesVilles.forEach(ville => {
+                container.innerHTML += `
+                    <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-800 px-1 rounded">
+                        <input type="checkbox" value="${ville}" class="refine-ville-checkbox form-checkbox text-accent bg-dark" checked>
+                        <span>${ville}</span>
+                    </label>`;
+            });
+        }
+
+        async function calculerRaffinage() {
+            const resType = document.querySelector('input[name="res_type"]:checked').value;
+            const villesCochees = Array.from(document.querySelectorAll('.refine-ville-checkbox:checked')).map(cb => cb.value);
+            const bonusVille = parseFloat(document.getElementById('bonus-ville').value) || 0;
+            const bonusJour = parseFloat(document.getElementById('bonus-jour').value) || 0;
+            const bonusFocus = parseFloat(document.getElementById('bonus-focus').value) || 0;
+            const taxeVente = parseFloat(document.getElementById('taxe-vente').value) || 0;
+            const fraisStation = parseFloat(document.getElementById('frais-station').value) || 0;
+            
+            const resultsDiv = document.getElementById('refining-results');
+            resultsDiv.innerHTML = '<div class="animate-pulse text-accent text-center mt-10">Récupération des prix sur tous les marchés...</div>';
+            
+            if (!mapping[resType]) {
+                resultsDiv.innerHTML = '<div class="text-red-500">Type invalide</div>';
+                return;
+            }
+
+            const res_raw = mapping[resType].raw;
+            const res_ref = mapping[resType].refined;
+
+            // 1. Générer la liste des items
+            const items_to_fetch = new Set();
+            for (let t = 2; t <= 8; t++) {
+                for (let e = 0; e <= 3; e++) {
+                    if (t < 4 && e > 0) continue;
+                    
+                    const suffix = e > 0 ? `_LEVEL${e}@${e}` : "";
+                    items_to_fetch.add(`T${t}_${res_raw}${suffix}`);
+                    items_to_fetch.add(`T${t}_${res_ref}${suffix}`);
+                    
+                    if (t > 2) {
+                        if (t === 4) {
+                            items_to_fetch.add(`T3_${res_ref}`);
+                        } else {
+                            items_to_fetch.add(`T${t-1}_${res_ref}${suffix}`);
+                        }
+                    }
+                }
+            }
+
+            const items_list = Array.from(items_to_fetch);
+            
+            // 2. Récupérer les prix
+            const prices = {};
+            items_list.forEach(item => {
+                prices[item] = { min_sell: Infinity, city_sell: "N/A", max_buy: 0, city_buy: "N/A" };
+            });
+
+            try {
+                // Diviser en chunks de 20 (ou plus grand, l'API accepte beaucoup)
+                const chunk_size = 50; 
+                for (let i = 0; i < items_list.length; i += chunk_size) {
+                    const chunk = items_list.slice(i, i + chunk_size);
+                    const url = `https://europe.albion-online-data.com/api/v2/stats/prices/${chunk.join(',')}`;
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    data.forEach(entry => {
+                        let city = entry.city;
+                        let city_display = city === "Black Market" ? "Caerleon (Black Market)" : city;
+                        
+                        if (!villesCochees.includes(city_display)) return;
+                        
+                        const item_id = entry.item_id;
+                        if (prices[item_id]) {
+                            const s = entry.sell_price_min || 0;
+                            const b = entry.buy_price_max || 0;
+                            
+                            if (s > 0 && s < prices[item_id].min_sell) {
+                                prices[item_id].min_sell = s;
+                                prices[item_id].city_sell = city_display;
+                            }
+                            if (b > prices[item_id].max_buy) {
+                                prices[item_id].max_buy = b;
+                                prices[item_id].city_buy = city_display;
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                resultsDiv.innerHTML = `<div class='text-red-500'>Erreur de connexion AODP: ${e.message}</div>`;
+                return;
+            }
+
+            // 3. Génération du HTML
+            const rrr = (bonusVille + bonusJour + bonusFocus) / 100.0;
+            const taxe_mult = (100.0 - taxeVente) / 100.0;
+            const station_fee_mult = 0.1125 * (fraisStation / 100.0);
+            
+            let html = `
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left border-collapse bg-dark rounded overflow-hidden shadow-lg">
+                    <thead class="bg-gray-800 text-accent border-b border-gray-700">
+                        <tr>
+                            <th class="p-2 border-r border-gray-700">Tier</th>
+                            <th class="p-2 border-r border-gray-700">Matière Brute (Achat)</th>
+                            <th class="p-2 border-r border-gray-700">Matière Base (Achat)</th>
+                            <th class="p-2 border-r border-gray-700">Produit Raffiné (Vente)</th>
+                            <th class="p-2 border-r border-gray-700">Coûts (Achat + Station)</th>
+                            <th class="p-2 text-right">Profit Net (-Taxes)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            for (let t = 2; t <= 8; t++) {
+                for (let e = 0; e <= 3; e++) {
+                    if (t < 4 && e > 0) continue;
+                    
+                    const suffix = e > 0 ? `_LEVEL${e}@${e}` : "";
+                    const raw_id = `T${t}_${res_raw}${suffix}`;
+                    const ref_id = `T${t}_${res_ref}${suffix}`;
+                    
+                    let base_id = "";
+                    if (t === 4) {
+                        base_id = `T3_${res_ref}`;
+                    } else if (t > 2) {
+                        base_id = `T${t-1}_${res_ref}${suffix}`;
+                    }
+                    
+                    const qty_raw = amounts[t];
+                    const qty_base = t === 2 ? 0 : 1;
+                    
+                    const p_raw = prices[raw_id].min_sell !== Infinity ? prices[raw_id].min_sell : 0;
+                    
+                    let p_base = 0;
+                    let c_base_sell = "-";
+                    if (base_id) {
+                        p_base = prices[base_id].min_sell !== Infinity ? prices[base_id].min_sell : 0;
+                        c_base_sell = prices[base_id].city_sell;
+                    }
+                    
+                    const p_ref = prices[ref_id].max_buy;
+                    const c_raw_sell = prices[raw_id].city_sell;
+                    const c_ref_buy = prices[ref_id].city_buy;
+                    
+                    if (p_raw === 0 && p_base === 0 && p_ref === 0) continue;
+
+                    const cout_total_achat = (p_raw * qty_raw) + (p_base * qty_base);
+                    const valeur_economisee = cout_total_achat * rrr;
+                    const cout_net_achat = cout_total_achat - valeur_economisee;
+                    
+                    const iv_ref = get_iv_ref(t, e);
+                    const frais_station_silver = iv_ref * station_fee_mult;
+                    const cout_total_complet = cout_net_achat + frais_station_silver;
+                    
+                    const revenu_net = p_ref * taxe_mult;
+                    const profit = revenu_net - cout_total_complet;
+                    
+                    const colorClass = profit > 0 ? "text-green-400 font-bold bg-green-900/20" : "text-red-400 bg-red-900/10";
+                    
+                    const str_p_raw = p_raw > 0 ? p_raw.toLocaleString() : "???";
+                    const str_p_base = p_base > 0 ? p_base.toLocaleString() : "???";
+                    const str_p_ref = p_ref > 0 ? p_ref.toLocaleString() : "???";
+
+                    html += `
+                    <tr class="border-b border-gray-800 hover:bg-gray-900 transition-colors">
+                        <td class="p-2 font-bold text-gray-300 border-r border-gray-800 text-center bg-gray-900/50">T${t}.${e}</td>
+                        
+                        <td class="p-2 border-r border-gray-800">
+                            <div class="flex items-center gap-1">
+                                <img src="https://render.albiononline.com/v1/item/${raw_id}.png" class="w-5 h-5">
+                                <span class="text-white">${str_p_raw}</span> <span class="text-gray-500">x${qty_raw}</span>
+                            </div>
+                            <div class="text-[10px] text-gray-600 mt-1">${c_raw_sell}</div>
+                        </td>
+                        
+                        <td class="p-2 border-r border-gray-800">
+                            <div class="flex items-center gap-1">
+                                <img src="https://render.albiononline.com/v1/item/${base_id}.png" class="w-5 h-5" onerror="this.style.display='none'">
+                                <span class="text-white">${str_p_base}</span> <span class="text-gray-500">x${qty_base}</span>
+                            </div>
+                            <div class="text-[10px] text-gray-600 mt-1">${c_base_sell}</div>
+                        </td>
+                        
+                        <td class="p-2 border-r border-gray-800">
+                            <div class="flex items-center gap-1">
+                                <img src="https://render.albiononline.com/v1/item/${ref_id}.png" class="w-5 h-5">
+                                <span class="text-yellow-400 font-bold">${str_p_ref}</span>
+                            </div>
+                            <div class="text-[10px] text-gray-600 mt-1">${c_ref_buy}</div>
+                        </td>
+                        
+                        <td class="p-2 border-r border-gray-800 text-gray-400">
+                            <div>Net: <span class="text-white">${Math.round(cout_net_achat).toLocaleString()}</span> <span class="text-[10px] text-gray-500">(-${(rrr*100).toFixed(1)}% RRR)</span></div>
+                            <div>Frais: <span class="text-orange-300">+${Math.round(frais_station_silver).toLocaleString()}</span> <span class="text-[10px] text-gray-500">(Station)</span></div>
+                        </td>
+                        
+                        <td class="p-2 text-right ${colorClass}">
+                            <div class="font-bold">${Math.round(profit).toLocaleString()}</div>
+                            <div class="text-[10px] text-gray-500 mt-1 opacity-75">Taxes Vente incluses</div>
+                        </td>
+                    </tr>
+                    `;
+                }
+            }
+
+            html += `
+                    </tbody>
+                </table>
+            </div>
+            `;
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        initialiserInterface();
+    </script>
+</body>
+</html>

@@ -152,13 +152,15 @@
                     
                     const suffix = e > 0 ? `_LEVEL${e}@${e}` : "";
                     items_to_fetch.add(`T${t}_${res_raw}${suffix}`);
-                    items_to_fetch.add(`T${t}_${res_ref}${suffix}`);
+                    
+                    const ref_suffix = (resType === "ROCK") ? "" : suffix;
+                    items_to_fetch.add(`T${t}_${res_ref}${ref_suffix}`);
                     
                     if (t > 2) {
                         if (t === 4) {
                             items_to_fetch.add(`T3_${res_ref}`);
                         } else {
-                            items_to_fetch.add(`T${t-1}_${res_ref}${suffix}`);
+                            items_to_fetch.add(`T${t-1}_${res_ref}${ref_suffix}`);
                         }
                     }
                 }
@@ -239,19 +241,27 @@
                     
                     const suffix = e > 0 ? `_LEVEL${e}@${e}` : "";
                     const raw_id = `T${t}_${res_raw}${suffix}`;
-                    const ref_id = `T${t}_${res_ref}${suffix}`;
+                    
+                    const ref_suffix = (resType === "ROCK") ? "" : suffix;
+                    const ref_id = `T${t}_${res_ref}${ref_suffix}`;
                     
                     let base_id = "";
                     if (t === 4) {
                         base_id = `T3_${res_ref}`;
                     } else if (t > 2) {
-                        base_id = `T${t-1}_${res_ref}${suffix}`;
+                        base_id = `T${t-1}_${res_ref}${ref_suffix}`;
                     }
                     
                     const qty_raw = amounts[t];
                     const qty_base = t === 2 ? 0 : 1;
                     
-                    const p_raw = prices[raw_id].min_sell !== Infinity ? prices[raw_id].min_sell : 0;
+                    const p_raw_market = prices[raw_id].min_sell !== Infinity ? prices[raw_id].min_sell : 0;
+                    
+                    let divisor = 1;
+                    if (resType === "ROCK" && e > 0) {
+                        divisor = Math.pow(2, e);
+                    }
+                    const p_raw = p_raw_market / divisor;
                     
                     let p_base = 0;
                     let c_base_sell = "-";
@@ -264,13 +274,13 @@
                     const c_raw_sell = prices[raw_id].city_sell;
                     const c_ref_buy = prices[ref_id].city_buy;
                     
-                    if (p_raw === 0 && p_base === 0 && p_ref === 0) continue;
+                    if (p_raw_market === 0 && p_base === 0 && p_ref === 0) continue;
 
                     const cout_total_achat = (p_raw * qty_raw) + (p_base * qty_base);
                     const valeur_economisee = cout_total_achat * rrr;
                     const cout_net_achat = cout_total_achat - valeur_economisee;
                     
-                    const iv_ref = get_iv_ref(t, e);
+                    const iv_ref = get_iv_ref(t, resType === "ROCK" ? 0 : e);
                     const frais_station_silver = iv_ref * station_fee_mult;
                     const cout_total_complet = cout_net_achat + frais_station_silver;
                     
@@ -280,6 +290,7 @@
                     const colorClass = profit > 0 ? "text-green-400 font-bold bg-green-900/20" : "text-red-400 bg-red-900/10";
                     
                     const str_p_raw = p_raw > 0 ? p_raw.toLocaleString() : "???";
+                    const display_c_raw_sell = divisor > 1 ? `${c_raw_sell} (Vrai prix: ${p_raw_market.toLocaleString()})` : c_raw_sell;
                     const str_p_base = p_base > 0 ? p_base.toLocaleString() : "???";
                     const str_p_ref = p_ref > 0 ? p_ref.toLocaleString() : "???";
 
@@ -292,7 +303,7 @@
                                 <img src="https://render.albiononline.com/v1/item/${raw_id}.png" class="w-5 h-5">
                                 <span class="text-white">${str_p_raw}</span> <span class="text-gray-500">x${qty_raw}</span>
                             </div>
-                            <div class="text-[10px] text-gray-600 mt-1">${c_raw_sell}</div>
+                            <div class="text-[10px] text-gray-600 mt-1">${display_c_raw_sell}</div>
                         </td>
                         
                         <td class="p-2 border-r border-gray-800">

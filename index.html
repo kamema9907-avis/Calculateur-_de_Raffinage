@@ -229,7 +229,8 @@
                             <th class="p-2 border-r border-gray-700">Matière Base (Achat)</th>
                             <th class="p-2 border-r border-gray-700">Produit Raffiné (Vente)</th>
                             <th class="p-2 border-r border-gray-700">Coûts (Achat + Station)</th>
-                            <th class="p-2 text-right">Profit Net (-Taxes)</th>
+                            <th class="p-2 border-r border-gray-700 text-right">Profit Net (-Taxes)</th>
+                            <th class="p-2 text-right">% Retour</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -327,9 +328,12 @@
                             <div>Frais: <span class="text-orange-300">+${Math.round(frais_station_silver).toLocaleString()}</span> <span class="text-[10px] text-gray-500">(Station)</span></div>
                         </td>
                         
-                        <td class="p-2 text-right ${colorClass}">
+                        <td class="p-2 border-r border-gray-800 text-right ${colorClass}">
                             <div class="font-bold">${Math.round(profit).toLocaleString()}</div>
                             <div class="text-[10px] text-gray-500 mt-1 opacity-75">Taxes Vente incluses</div>
+                        </td>
+                        <td class="p-2 text-right font-bold ${cout_total_complet > 0 ? (profit > 0 ? 'text-green-400' : 'text-red-400') : 'text-gray-500'}">
+                            ${cout_total_complet > 0 ? (profit / cout_total_complet * 100).toFixed(1) + '%' : 'N/A'}
                         </td>
                     </tr>
                     `;
